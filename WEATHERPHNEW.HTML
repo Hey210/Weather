@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windy Map with Title and Overlays</title>
+    <style>
+        /* Ensure full-screen map container */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        /* Title container styling */
+        #title-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 15px;
+            background-color: #333; /* Dark background for the title */
+            text-align: center; /* Center the text horizontally */
+            color: #fff; /* White text color */
+            z-index: 3; /* Ensure it stays above the map and overlays */
+        }
+
+        /* Main Title styling (big letters) */
+        #main-title {
+            font-size: 36px; /* Big font size */
+            font-weight: bold;
+            text-transform: uppercase; /* Make it uppercase */
+            margin: 0; /* Remove default margin */
+        }
+
+        /* Subtitle container styling */
+        #subtitle {
+            display: flex;
+            flex-direction: column; /* Stack elements vertically for the "today" and date/time */
+            align-items: center; /* Center the content horizontally */
+            font-size: 14px; /* Small font size */
+            text-transform: lowercase; /* Make it lowercase */
+            margin-top: 5px; /* Space between title and subtitle */
+        }
+
+        /* Live text and blinking light container */
+        #live-container {
+            display: flex;
+            align-items: center; /* Center the text and blinking light horizontally */
+        }
+
+        /* Red Blinking Light next to subtitle */
+        .blinking-light {
+            width: 12px; /* Size of the light */
+            height: 12px;
+            border-radius: 50%; /* Make it a circle */
+            background-color: red; /* Red color */
+            margin-left: 8px; /* Space between text and light */
+            animation: blink 1s infinite; /* Blinking animation */
+        }
+
+        /* Blinking animation */
+        @keyframes blink {
+            0% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+        /* Wrapper to contain map and full-screen overlays */
+        #map-container {
+            position: relative;
+            width: 100%;
+            height: 100vh; /* Full viewport height */
+        }
+
+        /* The iframe itself */
+        iframe {
+            border: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Full white overlays around the map to hide the UI elements */
+        .overlay-top,
+        .overlay-left,
+        .overlay-right,
+        .overlay-bottom {
+            position: absolute;
+            background: #ffffff; /* Solid white color */
+            z-index: 2;
+        }
+
+        /* Top overlay (to cover Windy logo) */
+        .overlay-top {
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 30px; /* Thin overlay, adjust height as needed */
+        }
+
+        /* Left overlay (to cover buttons on left) */
+        .overlay-left {
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 5px; /* Thin overlay, adjust width as needed */
+        }
+
+        /* Right overlay (to cover buttons on right) */
+        .overlay-right {
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 5px; /* Thin overlay, adjust width as needed */
+        }
+
+        /* Bottom overlay (to cover buttons or info at the bottom) */
+        .overlay-bottom {
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 30px; /* Thin overlay, adjust height as needed */
+        }
+
+        /* Styling for the menu button */
+        #menu-icon {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 30px;
+            height: 25px;
+            z-index: 5; /* Make sure the menu icon is above the map and overlays */
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #menu-icon span {
+            display: block;
+            width: 100%;
+            height: 4px;
+            background-color: #fff;
+            transition: transform 0.3s ease;
+        }
+
+        /* Menu container styling */
+        #menu {
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            background-color: #333;
+            color: white;
+            display: none;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 6;
+        }
+
+        #menu a {
+            display: block;
+            color: white;
+            padding: 10px;
+            text-decoration: none;
+        }
+
+        #menu a:hover {
+            background-color: #555;
+        }
+
+        /* Modal style for the message and note */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            width: 60%;
+        }
+
+        .modal p {
+            margin: 10px 0;
+        }
+
+        /* Overlay behind the modal */
+        .modal-overlay {
+            display: none; /* Hidden by default */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Title Container with Background -->
+    <div id="title-container">
+        <div id="main-title">PH WEATHER RADAR</div>
+        <div id="subtitle">
+            <div id="live-container">
+                <div>Live</div>
+                <div class="blinking-light"></div> 
+            </div>
+            <div id="today-text">Today is </div>
+            <div id="current-time"></div>
+        </div>
+    </div>
+
+    <div id="map-container">
+        <!-- Full-screen overlays around the map to hide the UI elements -->
+        <!-- Top Overlay (hides Windy logo) -->
+        <div class="overlay-top"></div>
+
+        <!-- Left Overlay (hides left-side controls or buttons) -->
+        <div class="overlay-left"></div>
+
+        <!-- Right Overlay (hides right-side controls or buttons) -->
+        <div class="overlay-right"></div>
+
+        <!-- Bottom Overlay (hides bottom controls or buttons) -->
+        <div class="overlay-bottom"></div>
+
+        <!-- Windy Map Embed -->
+        <iframe src="https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=default&metricTemp=default&metricWind=default&zoom=4&overlay=wind&product=ecmwf&level=surface&lat=20.315&lon=127.706&message=false&logo=false"
+                frameborder="0" allowfullscreen></iframe>
+    </div>
+
+    <!-- Menu Icon -->
+    <div id="menu-icon">
+        <span></span>
+        <span></span>
+        <span></span>
+    </div>
+
+    <!-- Menu Container -->
+    <div id="menu">
+        <a href="#" id="message-link">Message</a>
+        <a href="#" id="note-link">Note</a>
+    </div>
+
+    <!-- Modal and Overlay -->
+    <div id="modal-overlay" class="modal-overlay"></div>
+    <div id="message-modal" class="modal">
+        <p>This is a modified version of the Windy weather map. The other UI elements have been hidden while maintaining the core functionality of the map.</p>
+        <p>For more detailed and up-to-date information about the current weather conditions or forecasts for the day, simply click the Windy. You will be redirected to their platform for further insights.</p>
+        <p>This Site was Created by Norwell — because even the weather deserves a little TLC (tender loving code).</p>
+        <a href="#" id="close-message">Close</a>
+    </div>
+
+    <div id="note-modal" class="modal">
+        <p>To view the latest weather situation, simply press the play button below the map. This will display potential weather changes, including wind and storm forecasts.</p>
+        <p>Note: When using this site, please be aware that the forecasts shown are not guaranteed. There may be discrepancies in future weather predictions, especially during events like typhoons, where the predictions may change rapidly. Always refer to official weather updates for the most accurate and timely information.</p>
+        <a href="#" id="close-note">Close</a>
+    </div>
+
+    <script>
+        // Set the current date and time dynamically
+        function updateTimeAndDate() {
+            const now = new Date();
+            const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+            const date = now.toLocaleDateString();
+            const time = now.toLocaleTimeString();
+            const dayOfWeek = dayNames[now.getDay()];
+
+            // Update the Today text with date and time
+            document.getElementById('today-text').innerText = `Today is ${dayOfWeek}`;
+            document.getElementById('current-time').innerText = `Date: ${date} | Time: ${time}`;
+        }
+
+        // Call the function to update time and date every second
+        setInterval(updateTimeAndDate, 1000);
+
+        // Menu functionality
+        const menuIcon = document.getElementById('menu-icon');
+        const menu = document.getElementById('menu');
+        const messageLink = document.getElementById('message-link');
+        const noteLink = document.getElementById('note-link');
+        const messageModal = document.getElementById('message-modal');
+        const noteModal = document.getElementById('note-modal');
+        const modalOverlay = document.getElementById('modal-overlay');
+        const closeMessage = document.getElementById('close-message');
+        const closeNote = document.getElementById('close-note');
+
+        // Toggle menu visibility
+        menuIcon.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent the event from bubbling up
+            menu.style.display = (menu.style.display === 'none' || menu.style.display === '') ? 'block' : 'none';
+        });
+
+        // Show message modal
+        messageLink.addEventListener('click', () => {
+            messageModal.style.display = 'block';
+            modalOverlay.style.display = 'block';
+            noteModal.style.display = 'none'; // Hide note
+        });
+
+        // Show note modal
+        noteLink.addEventListener('click', () => {
+            noteModal.style.display = 'block';
+            modalOverlay.style.display = 'block';
+            messageModal.style.display = 'none'; // Hide message
+        });
+
+        // Close message modal
+        closeMessage.addEventListener('click', () => {
+            messageModal.style.display = 'none';
+            modalOverlay.style.display = 'none';
+        });
+
+        // Close note modal
+        closeNote.addEventListener('click', () => {
+            noteModal.style.display = 'none';
+            modalOverlay.style.display = 'none';
+        });
+
+        // Close the menu and modals if the user clicks outside of them
+        document.addEventListener('click', (e) => {
+            if (!menu.contains(e.target) && e.target !== menuIcon) {
+                menu.style.display = 'none';
+            }
+            if (!messageModal.contains(e.target) && !noteModal.contains(e.target) && e.target !== messageLink && e.target !== noteLink) {
+                messageModal.style.display = 'none';
+                noteModal.style.display = 'none';
+                modalOverlay.style.display = 'none';
+            }
+        });
+    </script>
+
+</body>
+</html>
